@@ -83,6 +83,47 @@ def get_wsman_resource_attr(doc, resource_uri, attr_name, nullable=False,
             return item.text.strip()
 
 
+def get_wsman_resource_attrs(doc, resource_uri, attr_name, nullable=False,
+                             allow_missing=False):
+    """Find all attributes of a resource in an ElementTree object.
+
+    :param doc: the element tree object.
+    :param resource_uri: the resource URI of the namespace.
+    :param attr_name: the name of the attributes.
+    :param nullable: enables checking if the element contains an
+                     XMLSchema-instance namespaced nil attribute that has a
+                     value of True. In this case, it will return None.
+    :param allow_missing: if set to True, attributes missing from the XML
+                          document will return None instead of raising
+                          DRACMissingResponseField.
+    :raises: DRACMissingResponseField if the attribute is missing from the XML
+             doc and allow_missing is False.
+    :raises: DRACEmptyResponseField if the attribute is present in the XML doc
+             but it has no text and nullable is False.
+    :returns: value of the attribute
+    """
+    items = find_xml(doc, attr_name, resource_uri, find_all=True)
+
+    if not items:
+        if allow_missing:
+            return
+        else:
+            raise exceptions.DRACMissingResponseField(attr=attr_name)
+
+    if not nullable:
+        for item in items:
+            if item.text is None:
+                raise exceptions.DRACEmptyResponseField(attr=attr_name)
+        return [item.text.strip() for item in items]
+    else:
+
+        def is_not_nil(item):
+            """Return whether an element is nil."""
+            return item.attrib.get('{%s}nil' % NS_XMLSchema_Instance) != 'true'
+
+        return [item.text.strip() for item in items if is_not_nil(item)]
+
+
 def is_reboot_required(doc, resource_uri):
     """Check the response document if reboot is requested.
 
